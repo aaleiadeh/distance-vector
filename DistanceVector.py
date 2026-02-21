@@ -29,6 +29,12 @@ class DistanceVector(Node):
         super(DistanceVector, self).__init__(name, topolink, outgoing_links, incoming_links)
         
         # TODO: Create any necessary data structure(s) to contain the Node's internal state / distance vector data
+        self.distance_map = {}
+        self.distance_map[self.name] = 0
+        self.predecessor = {self.name: self.name}
+        for neighbor in self.outgoing_links:
+            self.distance_map[neighbor.name] = int(neighbor.weight)
+            self.predecessor[neighbor] = self.name
 
     def send_initial_messages(self):
         """ This is run once at the beginning of the simulation, after all
@@ -41,6 +47,10 @@ class DistanceVector(Node):
 
         # TODO - Each node needs to build a message and send it to each of its neighbors
         # HINT: Take a look at the skeleton methods provided for you in Node.py
+        for neighbor in self.incoming_links:
+            msg = (self.name, self.distance_map)
+            self.send_msg(msg, neighbor.name)
+
 
     def process_BF(self):
         """ This is run continuously (repeatedly) during the simulation. DV
@@ -49,13 +59,33 @@ class DistanceVector(Node):
 
         # Implement the Bellman-Ford algorithm here.  It must accomplish two tasks below:
         # TODO 1. Process queued messages       
+        updated = False
         for msg in self.messages:            
-            pass
+            sender_name, sender_map = msg
+            sender_distance = self.get_outgoing_neighbor_weight(sender_name)
+            # if sender_distance == "Node Not Found": Unecessary because if we received a msg, it must be from a valid neighbor that has us as an incoming
+            #     continue
+
+            sender_distance = sender_distance[1]
+            for dest, cost in sender_map.items():
+                if dest == self.name: # A Node can advertise a negative distance for other nodes (but not for itself)
+                    continue
+                new_cost = sender_distance + cost
+                new_cost = -99 if new_cost < -99 else new_cost
+                original_cost = self.distance_map.get(dest) # Not Guaranteed that we have a direct route to the node our outgoing neighbor has. Must account for None case
+                if original_cost == -99: # Avoid infinite negative cycle
+                    continue
+                if original_cost is None or new_cost < original_cost:
+                    self.distance_map[dest] = new_cost
+                    self.predecessor[dest] = sender_name
+                    updated = True
         
         # Empty queue
         self.messages = []
 
-        # TODO 2. Send neighbors updated distances               
+        # TODO 2. Send neighbors updated distances
+        if updated:
+            self.send_initial_messages()               
 
     def log_distances(self):
         """ This function is called immedately after process_BF each round.  It 
@@ -69,5 +99,9 @@ class DistanceVector(Node):
         NOTE: A0 shows that the distance to self is 0 """
         
         # TODO: Use the provided helper function add_entry() to accomplish this task (see helpers.py).
-        # An example call that which prints the format example text above (hardcoded) is provided.        
-        add_entry("A", "(A,0) (B,1) (C,-2)")        
+        # An example call that which prints the format example text above (hardcoded) is provided.    
+        log = ""
+        for dest, cost in self.distance_map.items():
+            log += f"({dest},{cost}) "
+        log = log.strip()
+        add_entry(self.name, log)        
