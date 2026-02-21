@@ -31,10 +31,8 @@ class DistanceVector(Node):
         # TODO: Create any necessary data structure(s) to contain the Node's internal state / distance vector data
         self.distance_map = {}
         self.distance_map[self.name] = 0
-        self.predecessor = {self.name: self.name}
         for neighbor in self.outgoing_links:
             self.distance_map[neighbor.name] = int(neighbor.weight)
-            self.predecessor[neighbor] = self.name
 
     def send_initial_messages(self):
         """ This is run once at the beginning of the simulation, after all
@@ -70,6 +68,13 @@ class DistanceVector(Node):
             for dest, cost in sender_map.items():
                 if dest == self.name: # A Node can advertise a negative distance for other nodes (but not for itself)
                     continue
+                if cost == -99: # A Node that receives an advertisement with a distance of -99 from a downstream neighbor should also assume that it can reach the same destination at infinitely low cost (-99).
+                    if self.distance_map[dest] == cost: # Already -99
+                        continue
+                    self.distance_map[dest] = cost
+                    updated = True
+                    continue
+
                 new_cost = sender_distance + cost
                 new_cost = -99 if new_cost < -99 else new_cost
                 original_cost = self.distance_map.get(dest) # Not Guaranteed that we have a direct route to the node our outgoing neighbor has. Must account for None case
@@ -77,7 +82,6 @@ class DistanceVector(Node):
                     continue
                 if original_cost is None or new_cost < original_cost:
                     self.distance_map[dest] = new_cost
-                    self.predecessor[dest] = sender_name
                     updated = True
         
         # Empty queue
